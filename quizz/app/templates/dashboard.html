@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Dashboard</h2>
+  {% if current_user.role == 'teacher' %}
+    <a class="btn btn-secondary" href="{{ url_for('upload') }}">Upload Textbook</a>
+    <h3 class="mt-4">Your Documents</h3>
+    <ul>
+      {% for doc in docs %}
+        <li>{{ doc.filename }} - <a href="{{ url_for('generate_quiz', doc_id=doc.id) }}">Generate Quiz</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  <h3 class="mt-4">Available Quizzes</h3>
+  <ul>
+    {% for quiz in quizzes %}
+      <li>{{ quiz.title }} - <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}">Take Quiz</a></li>
+    {% endfor %}
+  </ul>
+{% endblock %}

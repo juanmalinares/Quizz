@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ quiz.title }}</h2>
+<form method="post">
+  {% for question in quiz.questions %}
+    <div class="mb-3">
+      <label>{{ loop.index }}. {{ question.text }}</label>
+      <input type="text" class="form-control" name="{{ question.id }}">
+    </div>
+  {% endfor %}
+  <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+{% endblock %}
