@@ -5,3 +5,8 @@ Flask-Migrate
 Flask-WTF
 PyPDF2
 openai
+celery
+redis
+boto3
+Pillow
+pytesseract

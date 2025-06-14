@@ -6,7 +6,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from . import db
 from .models import User, Document, Quiz, Question, Option, UserQuiz
 from .forms import LoginForm, RegisterForm, UploadForm
-from .ai import generate_questions
+from .utils import read_document_text
+from .tasks import generate_quiz as generate_quiz_task
 from werkzeug.utils import secure_filename
 
 from flask import current_app as app
@@ -58,6 +59,36 @@ def dashboard():
     return render_template('dashboard.html', docs=docs, quizzes=quizzes)
 
 
+@app.route('/api/documents/<int:id>', methods=['PATCH'])
+@login_required
+def api_patch_document(id):
+    doc = Document.query.get_or_404(id)
+    if doc.uploaded_by != current_user.id:
+        return '', 403
+    data = request.get_json() or {}
+    if 'friendly_name' in data:
+        doc.friendly_name = data['friendly_name']
+    if 'instructions' in data:
+        doc.instructions = data['instructions']
+    if 'desired_q' in data:
+        doc.desired_q = int(data['desired_q'])
+    db.session.commit()
+    return {'id': doc.id, 'friendly_name': doc.friendly_name}
+
+
+@app.route('/api/quizzes/<int:id>', methods=['PATCH'])
+@login_required
+def api_patch_quiz(id):
+    quiz = Quiz.query.get_or_404(id)
+    if quiz.document.uploaded_by != current_user.id:
+        return '', 403
+    data = request.get_json() or {}
+    if 'friendly_name' in data:
+        quiz.friendly_name = data['friendly_name']
+    db.session.commit()
+    return {'id': quiz.id, 'friendly_name': quiz.friendly_name}
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
@@ -67,9 +98,22 @@ def upload():
     if form.validate_on_submit():
         f = form.file.data
         filename = secure_filename(f.filename)
+        ext = os.path.splitext(filename)[1].lower()
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         f.save(path)
-        doc = Document(filename=filename, uploaded_by=current_user.id)
+        doc = Document(filename=filename, uploaded_by=current_user.id,
+                       instructions=request.form.get('instructions'),
+                       desired_q=int(request.form.get('desired_q', 10)))
+        if ext == '.txt':
+            doc.file_type = 'text'
+        elif ext in {'.png', '.jpg', '.jpeg'}:
+            doc.file_type = 'image'
+            # pretend upload to S3
+            doc.s3_url = f"s3://{os.getenv('AWS_S3_BUCKET','bucket')}/{filename}"
+        else:
+            doc.file_type = 'pdf'
+        # store extracted UTF-8 content for later quiz generation
+        doc.content = read_document_text(path)
         db.session.add(doc)
         db.session.commit()
         flash('File uploaded')
@@ -80,22 +124,16 @@ def upload():
 @app.route('/generate_quiz/<int:doc_id>')
 @login_required
 def generate_quiz(doc_id):
-    doc = Document.query.get_or_404(doc_id)
-    path = os.path.join(app.config['UPLOAD_FOLDER'], doc.filename)
-    try:
-        with open(path, 'r', errors='ignore') as f:
-            text = f.read()
-    except Exception:
-        text = ''
-    questions = generate_questions(text)
-    quiz = Quiz(title=doc.filename, document_id=doc.id)
-    db.session.add(quiz)
-    for q in questions:
-        ques = Question(quiz=quiz, text=q['question'], qtype='short', answer=q['answer'])
-        db.session.add(ques)
-    db.session.commit()
-    flash('Quiz generated')
-    return redirect(url_for('dashboard'))
+    task = generate_quiz_task.delay(doc_id)
+    flash('Quiz generation started')
+    return redirect(url_for('task_status', task_id=task.id))
+
+
+@app.route('/api/task_status/<task_id>')
+@login_required
+def task_status(task_id):
+    async_result = generate_quiz_task.AsyncResult(task_id)
+    return {'state': async_result.state}
 
 
 @app.route('/take_quiz/<int:quiz_id>', methods=['GET', 'POST'])

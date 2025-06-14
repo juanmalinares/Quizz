@@ -6,14 +6,31 @@
     <h3 class="mt-4">Your Documents</h3>
     <ul>
       {% for doc in docs %}
-        <li>{{ doc.filename }} - <a href="{{ url_for('generate_quiz', doc_id=doc.id) }}">Generate Quiz</a></li>
+        <li>
+          {% if doc.file_type == 'image' %}
+            <img src="{{ doc.s3_url }}" class="h-16 inline" alt="thumb">
+          {% endif %}
+          <span contenteditable="true"
+                hx-patch="/api/documents/{{ doc.id }}"
+                hx-trigger="blur change"
+                hx-include="closest span"
+                class="editable-name">{{ doc.friendly_name or doc.filename }}</span>
+          - <a href="{{ url_for('generate_quiz', doc_id=doc.id) }}">Generate Quiz</a>
+        </li>
       {% endfor %}
     </ul>
   {% endif %}
   <h3 class="mt-4">Available Quizzes</h3>
   <ul>
     {% for quiz in quizzes %}
-      <li>{{ quiz.title }} - <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}">Take Quiz</a></li>
+      <li>
+        <span contenteditable="true"
+              hx-patch="/api/quizzes/{{ quiz.id }}"
+              hx-trigger="blur change"
+              hx-include="closest span"
+              class="editable-name">{{ quiz.friendly_name or quiz.title }}</span>
+        - <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}">Take Quiz</a>
+      </li>
     {% endfor %}
   </ul>
 {% endblock %}

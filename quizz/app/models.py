@@ -20,13 +20,21 @@ def load_user(user_id):
 class Document(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(200), nullable=False)
+    friendly_name = db.Column(db.String(120), index=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     created = db.Column(db.DateTime, default=datetime.utcnow)
+    file_type = db.Column(db.String(20))
+    s3_url = db.Column(db.String(200))
+    content = db.Column(db.Text)
+    instructions = db.Column(db.Text)
+    desired_q = db.Column(db.Integer, default=10)
+    quizzes = db.relationship('Quiz', backref='document', lazy=True)
 
 
 class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
+    friendly_name = db.Column(db.String(120), index=True)
     document_id = db.Column(db.Integer, db.ForeignKey('document.id'))
     created = db.Column(db.DateTime, default=datetime.utcnow)
     questions = db.relationship('Question', backref='quiz', lazy=True)
